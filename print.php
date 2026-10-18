@@ -22,15 +22,24 @@ $allSerials =$pdo->query("
 ?>
 
 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div class="flex items-center gap-2">
             <button onclick="selectAllVisibleLabels(true)" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">Select All</button>
             <button onclick="selectAllVisibleLabels(false)" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">Clear</button>
         </div>
-        <button onclick="exportLabelsPDF()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow flex items-center gap-2">
-            <i data-lucide="printer" class="w-4 h-4"></i>
-            <span>Export 50×25mm PDF & Mark Printed (<span id="selected_count_badge">0</span>)</span>
-        </button>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Copies Per Label Control (Default = 3) -->
+            <div class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <label for="copies_per_label" class="text-xs font-bold uppercase text-slate-600">Copies per Label:</label>
+                <input type="number" id="copies_per_label" value="3" min="1" max="20" oninput="updateSelectedBadge()" class="w-16 px-2.5 py-1 rounded-lg border border-slate-300 text-sm font-extrabold text-indigo-700 text-center outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+            </div>
+
+            <button onclick="exportLabelsPDF()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow flex items-center gap-2">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+                <span>Export 50×25mm PDF (<span id="selected_count_badge">0</span> Serials = <span id="total_pages_badge">0</span> Labels)</span>
+            </button>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -109,13 +118,20 @@ function applyPrintFilters() {
     renderLabelCards();
 }
 
+function updateSelectedBadge() {
+    const count = selectedSerialIds.size;
+    const copies = Math.max(1, parseInt(document.getElementById('copies_per_label').value) || 3);
+    document.getElementById('selected_count_badge').textContent = count;
+    document.getElementById('total_pages_badge').textContent = count * copies;
+}
+
 function renderLabelCards() {
     const container = document.getElementById('labels_grid_container');
     container.innerHTML = '';
 
     if (filteredSerials.length === 0) {
         container.innerHTML = `<div class="col-span-full bg-white p-10 rounded-2xl border text-center text-slate-400 text-sm">No labels match the filter.</div>`;
-        document.getElementById('selected_count_badge').textContent = '0';
+        updateSelectedBadge();
         return;
     }
 
@@ -146,7 +162,7 @@ function renderLabelCards() {
         JsBarcode(`#bc_svg_${item.id}`, item.serial_no, { format: "CODE128", displayValue: false, margin: 0, width: 1.8, height: 45 });
     });
 
-    document.getElementById('selected_count_badge').textContent = selectedSerialIds.size;
+    updateSelectedBadge();
 }
 
 function selectAllVisibleLabels(select) {
@@ -158,24 +174,38 @@ async function exportLabelsPDF() {
     const itemsToPrint = filteredSerials.filter(i => selectedSerialIds.has(i.id));
     if (!itemsToPrint.length) return alert("Select at least one label.");
 
+    const copiesPerLabel = Math.max(1, Math.min(50, parseInt(document.getElementById('copies_per_label').value) || 3));
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [50, 25] });
     const canvas = document.createElement('canvas');
 
-    itemsToPrint.forEach((item, idx) => {
-        if (idx > 0) doc.addPage([50, 25], 'landscape');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.text(String(item.model_name).toUpperCase(), 2.5, 4.2);
+    let isFirstPage = true;
 
+    itemsToPrint.forEach((item) => {
+        // Render barcode once per unique serial for fast generation
         JsBarcode(canvas, item.serial_no, { format: "CODE128", displayValue: false, margin: 0, width: 4, height: 120 });
-        doc.addImage(canvas.toDataURL('image/png'), 'PNG', 2.5, 5.2, 45, 14.2);
+        const barcodeDataUrl = canvas.toDataURL('image/png');
 
-        doc.setFontSize(9.5);
-        doc.text(String(item.serial_no), 25, 23.3, { align: 'center' });
+        // Print N copies of this label
+        for (let c = 0; c < copiesPerLabel; c++) {
+            if (!isFirstPage) {
+                doc.addPage([50, 25], 'landscape');
+            }
+            isFirstPage = false;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.text(String(item.model_name).toUpperCase(), 2.5, 4.2);
+
+            doc.addImage(barcodeDataUrl, 'PNG', 2.5, 5.2, 45, 14.2);
+
+            doc.setFontSize(9.5);
+            doc.text(String(item.serial_no), 25, 23.3, { align: 'center' });
+        }
     });
 
-    doc.save(`SwitchNex_Labels_${new Date().toISOString().slice(0,10)}.pdf`);
+    doc.save(`SwitchNex_Labels_${copiesPerLabel}x_${new Date().toISOString().slice(0,10)}.pdf`);
 
     const ids = itemsToPrint.map(i => i.id);
     await fetch('api.php?action=mark_printed', {

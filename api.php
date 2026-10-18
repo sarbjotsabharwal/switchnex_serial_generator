@@ -4,7 +4,6 @@ header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? '';
 
-// 1. Mark Printed
 if ($action === 'mark_printed' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $ids = array_map('intval', $data['ids'] ?? []);
@@ -17,7 +16,6 @@ if ($action === 'mark_printed' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// 2. Global Search
 if ($action === 'global_search') {
     $q = trim($_GET['q'] ?? '');
     if (strlen($q) < 2) {
@@ -28,7 +26,7 @@ if ($action === 'global_search') {
     $stmt = $pdo->prepare("
         SELECT s.id, s.serial_no, s.batch_code, s.is_printed, s.printed_at, s.is_sold, s.created_at,
                p.product_name, p.product_type, p.model_name,
-               sa.customer_name, sa.customer_mobile, sa.dealer_name, sa.sale_date, sa.warranty_months,
+               sa.customer_name, sa.customer_mobile, sa.customer_address, sa.dealer_name, sa.sale_date, sa.warranty_months,
                DATE_ADD(sa.sale_date, INTERVAL sa.warranty_months MONTH) AS warranty_expiry
         FROM serial_numbers s
         JOIN products p ON s.product_id = p.id
@@ -37,11 +35,12 @@ if ($action === 'global_search') {
            OR p.model_name LIKE ?
            OR sa.customer_name LIKE ?
            OR sa.customer_mobile LIKE ?
+           OR sa.customer_address LIKE ?
            OR sa.dealer_name LIKE ?
         ORDER BY s.id DESC
         LIMIT 25
     ");
-    $stmt->execute([$like, $like, $like, $like, $like]);
+    $stmt->execute([$like, $like, $like, $like, $like, $like]);
     echo json_encode($stmt->fetchAll());
     exit;
 }

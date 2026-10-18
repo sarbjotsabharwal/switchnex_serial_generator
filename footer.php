@@ -51,7 +51,7 @@
                                 <span class="mono text-[11px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded">${item.model_name}</span>
                             </div>
                             <div class="text-xs text-slate-500 mt-0.5">
-                                ${item.is_sold == 1 ? `Customer: <b>${item.customer_name}</b> (${item.customer_mobile}) • Dealer: ${item.dealer_name}` : `${item.product_name} (${item.product_type})`}
+                                ${item.is_sold == 1 ? `Customer: <b>${item.customer_name}</b> (${item.customer_mobile}) •${item.customer_address || ''}` : `${item.product_name} (${item.product_type})`}
                             </div>
                         </div>
                         <div class="flex flex-col items-end gap-1 shrink-0">
@@ -94,6 +94,7 @@
                     <div class="grid grid-cols-2 gap-2 text-xs">
                         <div><span class="text-slate-500">Customer:</span> <strong class="text-slate-900">${item.customer_name}</strong></div>
                         <div><span class="text-slate-500">Mobile:</span> <strong class="mono text-slate-900">${item.customer_mobile}</strong></div>
+                        <div class="col-span-2"><span class="text-slate-500">Address:</span> <strong class="text-slate-900">${item.customer_address || '—'}</strong></div>
                         <div><span class="text-slate-500">Dealer:</span> <strong class="text-slate-900">${item.dealer_name}</strong></div>
                         <div><span class="text-slate-500">Sale Date:</span> <strong class="text-slate-900">${item.sale_date}</strong></div>
                         <div class="col-span-2"><span class="text-slate-500">Warranty Expiry:</span> <strong class="text-emerald-700">${item.warranty_expiry || 'N/A'} (${item.warranty_months} Months)</strong></div>

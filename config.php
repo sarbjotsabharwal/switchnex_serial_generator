@@ -17,11 +17,21 @@ try {
     die("Database connection failed: " . htmlspecialchars($e->getMessage()));
 }
 
-// Auto-seed default admin (Username: admin | Password: admin123) if table is empty
+// Auto-seed default admin (Username: admin | Password: admin123)
 $adminCount = (int)$pdo->query("SELECT COUNT(*) FROM admins")->fetchColumn();
 if ($adminCount === 0) {
     $hash = password_hash('admin123', PASSWORD_DEFAULT);
     $pdo->prepare("INSERT INTO admins (username, password_hash, full_name) VALUES ('admin', ?, 'SwitchNex Admin')")->execute([$hash]);
+}
+
+// Auto-ensure customer_address column exists in sales table
+try {
+    $colCheck = $pdo->query("SHOW COLUMNS FROM sales LIKE 'customer_address'")->fetch();
+    if (!$colCheck) {
+        $pdo->exec("ALTER TABLE sales ADD COLUMN customer_address TEXT NULL AFTER customer_mobile");
+    }
+} catch (Exception $e) {
+    // Ignore if table doesn't exist yet
 }
 
 function generateSerialFromPattern($pattern, $prefix, $sizeCode, $modelName) {

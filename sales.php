@@ -2,12 +2,13 @@
 require_once __DIR__ . '/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'register_sale') {
-    $serial_no = strtoupper(trim($_POST['serial_no']));
-    $customer_name = trim($_POST['customer_name']);
-    $customer_mobile = trim($_POST['customer_mobile']);
-    $dealer_name = trim($_POST['dealer_name']);
-    $sale_date = $_POST['sale_date'];
-    $warranty_months = (int)$_POST['warranty_months'];
+    $serial_no        = strtoupper(trim($_POST['serial_no']));
+    $customer_name    = trim($_POST['customer_name']);
+    $customer_mobile  = trim($_POST['customer_mobile']);
+    $customer_address = trim($_POST['customer_address'] ?? '');
+    $dealer_name      = trim($_POST['dealer_name']);
+    $sale_date        = $_POST['sale_date'];
+    $warranty_months  = (int)$_POST['warranty_months'];
 
     $stmt = $pdo->prepare("SELECT id, is_sold FROM serial_numbers WHERE serial_no = ?");
     $stmt->execute([$serial_no]);
@@ -20,8 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     } else {
         $pdo->beginTransaction();
         try {
-            $ins = $pdo->prepare("INSERT INTO sales (serial_id, customer_name, customer_mobile, dealer_name, sale_date, warranty_months) VALUES (?, ?, ?, ?, ?, ?)");
-            $ins->execute([$snRow['id'], $customer_name, $customer_mobile, $dealer_name, $sale_date, $warranty_months]);
+            $ins = $pdo->prepare("INSERT INTO sales (serial_id, customer_name, customer_mobile, customer_address, dealer_name, sale_date, warranty_months) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $ins->execute([$snRow['id'], $customer_name, $customer_mobile, $customer_address, $dealer_name, $sale_date, $warranty_months]);
 
             $upd = $pdo->prepare("UPDATE serial_numbers SET is_sold = 1, sold_at = NOW() WHERE id = ?");
             $upd->execute([$snRow['id']]);
@@ -97,6 +98,10 @@ $salesRecords = $pdo->query("
                 <input type="tel" name="customer_mobile" required placeholder="10-digit mobile" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm mono outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
+                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Customer Address *</label>
+                <textarea name="customer_address" rows="2" required placeholder="House No, Street, City, Pin Code" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+            <div>
                 <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Dealer Name *</label>
                 <input type="text" name="dealer_name" required placeholder="Selling Dealer / Store" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
@@ -130,7 +135,7 @@ $salesRecords = $pdo->query("
                 <thead>
                     <tr class="bg-slate-50 text-slate-500 text-xs uppercase">
                         <th class="py-3 px-4 font-semibold">Serial & Model</th>
-                        <th class="py-3 px-4 font-semibold">Customer</th>
+                        <th class="py-3 px-4 font-semibold">Customer & Address</th>
                         <th class="py-3 px-4 font-semibold">Dealer</th>
                         <th class="py-3 px-4 font-semibold">Sale Date</th>
                         <th class="py-3 px-4 font-semibold">Warranty Status</th>
@@ -150,7 +155,12 @@ $salesRecords = $pdo->query("
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="font-bold text-slate-800"><?= htmlspecialchars($sr['customer_name']) ?></div>
-                                <div class="mono text-xs text-slate-500"><?= htmlspecialchars($sr['customer_mobile']) ?></div>
+                                <div class="mono text-xs text-indigo-600"><?= htmlspecialchars($sr['customer_mobile']) ?></div>
+                                <?php if (!empty($sr['customer_address'])): ?>
+                                    <div class="text-xs text-slate-500 mt-0.5 max-w-xs truncate" title="<?= htmlspecialchars($sr['customer_address']) ?>">
+                                        <?= htmlspecialchars($sr['customer_address']) ?>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                             <td class="py-3.5 px-4 font-semibold text-slate-700"><?= htmlspecialchars($sr['dealer_name']) ?></td>
                             <td class="py-3.5 px-4 text-xs text-slate-600"><?= htmlspecialchars($sr['sale_date']) ?></td>
