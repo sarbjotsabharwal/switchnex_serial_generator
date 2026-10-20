@@ -1,20 +1,33 @@
 <?php
 require_once __DIR__ . '/auth.php';
 
-// Add Product
+// Add Product (Supports single or comma-separated multiple models)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_product') {
     $p_name = trim($_POST['product_name']);
     $p_type = trim($_POST['product_type']);
-    $m_name = strtoupper(trim($_POST['model_name']));
+    $raw_models = $_POST['model_name'] ?? '';
+    
     preg_match('/(\d+)/', $p_type, $m);
     $size_code = trim($_POST['size_code']) !== '' ? trim($_POST['size_code']) : ($m[1] ?? '00');
 
-    try {
-        $stmt = $pdo->prepare("INSERT INTO products (product_name, product_type, size_code, model_name) VALUES (?, ?, ?, ?)");
+    // Allow comma-separated models e.g. "SN3200, SN3200-PRO, SN3250"
+    $models = array_filter(array_map(function($v) {
+        return strtoupper(trim($v));
+    }, explode(',', $raw_models)));
+
+    $added = 0;
+    $stmt = $pdo->prepare("INSERT IGNORE INTO products (product_name, product_type, size_code, model_name) VALUES (?, ?, ?, ?)");
+    foreach ($models as $m_name) {
         $stmt->execute([$p_name, $p_type, $size_code, $m_name]);
-        setFlash("Product added successfully.");
-    } catch (PDOException $e) {
-        setFlash("Product linkage already exists.", "error");
+        if ($stmt->rowCount() > 0) {
+            $added++;
+        }
+    }
+
+    if ($added > 0) {
+        setFlash("$added model(s) linked to $p_name ($p_type).");
+    } else {
+        setFlash("Model linkage already exists.", "error");
     }
     header("Location: products.php");
     exit;
@@ -42,48 +55,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit_
 // Delete Product
 if (isset($_GET['delete'])) {
     $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([(int)$_GET['delete']]);
-    setFlash("Product deleted.");
+    setFlash("Product model deleted.");
     header("Location: products.php");
     exit;
 }
 
 $pageTitle = 'Products';
 require_once __DIR__ . '/header.php';
-$products = $pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_code ASC")->fetchAll();
+$products = $pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_code ASC, model_name ASC")->fetchAll();
+
+$existingNames = array_unique(array_column($products, 'product_name'));
+$existingTypes = array_unique(array_column($products, 'product_type'));
 ?>
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     <!-- Add Form -->
     <div class="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
-        <h3 class="text-base font-bold text-slate-900 mb-4">Add Product Model</h3>
+        <h3 class="text-base font-bold text-slate-900 mb-4">Add Product & Model Linkage</h3>
         <form method="POST" class="space-y-4">
             <input type="hidden" name="action" value="add_product">
             <div>
                 <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Product Name *</label>
-                <input type="text" name="product_name" required placeholder="LED TV" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" name="product_name" list="list_product_names" required placeholder="LED TV" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                <datalist id="list_product_names">
+                    <?php foreach ($existingNames as $en): ?>
+                        <option value="<?= htmlspecialchars($en) ?>">
+                    <?php endforeach; ?>
+                </datalist>
             </div>
             <div class="grid grid-cols-3 gap-3">
                 <div class="col-span-2">
                     <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Type / Size *</label>
-                    <input type="text" name="product_type" oninput="autoExtractSizeCode(this.value, 'add_size_code')" required placeholder="43 Inch" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" name="product_type" list="list_product_types" oninput="autoExtractSizeCode(this.value, 'add_size_code')" required placeholder="32 Inch" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    <datalist id="list_product_types">
+                        <?php foreach ($existingTypes as $et): ?>
+                            <option value="<?= htmlspecialchars($et) ?>">
+                        <?php endforeach; ?>
+                    </datalist>
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Code *</label>
-                    <input type="text" name="size_code" id="add_size_code" required placeholder="43" maxlength="4" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm mono font-bold text-indigo-600 bg-slate-50 outline-none">
+                    <input type="text" name="size_code" id="add_size_code" required placeholder="32" maxlength="4" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm mono font-bold text-indigo-600 bg-slate-50 outline-none">
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Model Name *</label>
-                <input type="text" name="model_name" required placeholder="SN4300" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm mono uppercase outline-none focus:ring-2 focus:ring-indigo-500">
+                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Model Name(s) *</label>
+                <input type="text" name="model_name" required placeholder="SN3200, SN3200-PRO" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm mono uppercase outline-none focus:ring-2 focus:ring-indigo-500">
+                <p class="text-[11px] text-slate-400 mt-1">Separate with commas to add multiple models for the same size.</p>
             </div>
-            <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition">Save Product</button>
+            <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition">Save Model Linkage</button>
         </form>
     </div>
 
     <!-- Products Table -->
     <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-            <h3 class="text-base font-bold text-slate-900">Product Models</h3>
+            <h3 class="text-base font-bold text-slate-900">Linked Product Models</h3>
             <span class="text-xs font-bold text-slate-500"><?= count($products) ?> Models</span>
         </div>
         <div class="overflow-x-auto">
@@ -106,7 +133,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_
                             <td class="py-3.5 px-5"><span class="mono text-xs font-bold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md"><?= htmlspecialchars($p['model_name']) ?></span></td>
                             <td class="py-3.5 px-5 text-right space-x-3">
                                 <button onclick='openEditModal(<?= json_encode($p) ?>)' class="text-xs font-bold text-indigo-600 hover:text-indigo-800">Edit</button>
-                                <a href="?delete=<?= $p['id'] ?>" onclick="return confirm('Delete this product?')" class="text-xs font-bold text-red-600 hover:text-red-800">Delete</a>
+                                <a href="?delete=<?= $p['id'] ?>" onclick="return confirm('Delete this model?')" class="text-xs font-bold text-red-600 hover:text-red-800">Delete</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -120,7 +147,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_
 <div id="edit_product_modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-view">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 class="text-base font-bold text-slate-900">Edit Product</h3>
+            <h3 class="text-base font-bold text-slate-900">Edit Product Model</h3>
             <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
         <form method="POST" class="space-y-4">
@@ -146,7 +173,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">Cancel</button>
-                <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold">Update Product</button>
+                <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold">Update Model</button>
             </div>
         </form>
     </div>

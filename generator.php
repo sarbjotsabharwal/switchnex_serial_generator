@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
                 }
             }
             $pdo->commit();
-            setFlash("$inserted serial numbers generated ($batch_code).");
+            setFlash("$inserted serial numbers generated for {$product['model_name']} ($batch_code).");
             header("Location: print.php?batch=" . urlencode($batch_code));
             exit;
         } catch (Exception $e) {$pdo->rollBack();
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
 
 $pageTitle = 'Generate Serials';
 require_once __DIR__ . '/header.php';
-$products =$pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_code ASC")->fetchAll();
+$products =$pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_code ASC, model_name ASC")->fetchAll();
 ?>
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -44,46 +44,56 @@ $products =$pdo->query("SELECT * FROM products ORDER BY product_name ASC, size_c
         <h3 class="text-base font-bold text-slate-900 mb-5">Generate Serial Numbers</h3>
         <form method="POST" class="space-y-4">
             <input type="hidden" name="action" value="generate_serials">
-            <input type="hidden" name="product_id" id="gen_product_id" required>
 
+            <!-- 1. Product Name -->
             <div>
                 <label class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Product Name *</label>
-                <select id="gen_product_name" onchange="onProductNameChange()" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold bg-white"></select>
+                <select id="gen_product_name" onchange="onProductNameChange()" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- 2. Product Type (Grouped uniquely per Product Name) -->
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Product Type *</label>
-                    <select id="gen_product_type" onchange="onProductTypeChange()" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold bg-white"></select>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Product Type / Size *</label>
+                    <select id="gen_product_type" onchange="onProductTypeChange()" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
                 </div>
+
+                <!-- 3. Linked Model Name Dropdown (Supports multiple models per type) -->
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Model Name</label>
-                    <input type="text" id="gen_model_name" readonly class="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/60 text-indigo-700 mono font-bold text-sm">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold uppercase text-slate-600">Model Name *</label>
+                        <span id="model_count_badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700"></span>
+                    </div>
+                    <select name="product_id" id="gen_model_select" onchange="onModelChange()" required class="w-full px-3.5 py-2.5 rounded-xl border border-indigo-300 bg-indigo-50/40 text-indigo-800 mono font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
                 </div>
             </div>
 
+            <!-- 4. Quantity -->
             <div>
                 <label class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Quantity *</label>
                 <div class="flex items-center gap-2">
-                    <input type="number" name="qty" id="gen_qty" value="10" min="1" max="1000" required class="w-36 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-extrabold">
-                    <button type="button" onclick="document.getElementById('gen_qty').value=10" class="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">10</button>
-                    <button type="button" onclick="document.getElementById('gen_qty').value=25" class="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">25</button>
-                    <button type="button" onclick="document.getElementById('gen_qty').value=50" class="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">50</button>
-                    <button type="button" onclick="document.getElementById('gen_qty').value=100" class="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">100</button>
+                    <input type="number" name="qty" id="gen_qty" value="10" min="1" max="1000" required class="w-36 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-extrabold outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button type="button" onclick="document.getElementById('gen_qty').value=10" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">10</button>
+                    <button type="button" onclick="document.getElementById('gen_qty').value=25" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">25</button>
+                    <button type="button" onclick="document.getElementById('gen_qty').value=50" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">50</button>
+                    <button type="button" onclick="document.getElementById('gen_qty').value=100" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold">100</button>
                 </div>
             </div>
 
-            <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow transition">Generate Serials & Open Print Studio</button>
+            <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow transition">
+                Generate Serials & Open Print Studio
+            </button>
         </form>
     </div>
 
+    <!-- Live Label Preview -->
     <div class="lg:col-span-5 bg-slate-900 text-white p-6 rounded-2xl shadow-lg flex flex-col items-center">
         <div class="w-full flex justify-between items-center mb-4">
             <span class="text-xs font-bold uppercase text-slate-400">Label Preview (50mm × 25mm)</span>
             <span class="mono text-xs text-amber-400 font-bold" id="live_sn_sample"></span>
         </div>
         <div class="w-[300px] h-[150px] bg-white rounded-lg p-3 flex flex-col justify-between items-center text-black shadow-md">
-            <div class="w-full text-left pl-1 font-extrabold text-sm uppercase leading-none" id="preview_label_model">SN4300</div>
+            <div class="w-full text-left pl-1 font-extrabold text-sm uppercase leading-none" id="preview_label_model">SN3200</div>
             <svg id="generator_preview_barcode" class="w-full h-20"></svg>
             <div class="mono font-extrabold text-sm tracking-widest leading-none" id="preview_label_sn"></div>
         </div>
@@ -97,6 +107,7 @@ const CURRENT_MM = "<?= date('m') ?>";
 const CURRENT_YY = "<?= date('y') ?>";
 const CURRENT_YYYY = "<?= date('Y') ?>";
 
+// Step 1: Populate unique Product Names (e.g., LED TV, Washing Machine)
 function initGeneratorDropdowns() {
     const names = [...new Set(PRODUCTS_DATA.map(p => p.product_name))];
     const sel = document.getElementById('gen_product_name');
@@ -104,21 +115,41 @@ function initGeneratorDropdowns() {
     if (names.length) onProductNameChange();
 }
 
+// Step 2: Populate unique Product Types for selected Product Name (e.g., 32 Inch, 43 Inch)
 function onProductNameChange() {
-    const name = document.getElementById('gen_product_name').value;
-    const matches = PRODUCTS_DATA.filter(p => p.product_name === name);
+    const selectedName = document.getElementById('gen_product_name').value;
+    const matchingProducts = PRODUCTS_DATA.filter(p => p.product_name === selectedName);
+    const uniqueTypes = [...new Set(matchingProducts.map(p => p.product_type))];
+
     const typeSel = document.getElementById('gen_product_type');
-    typeSel.innerHTML = matches.map(p => `<option value="${p.id}">${p.product_type}</option>`).join('');
-    if (matches.length) onProductTypeChange();
+    typeSel.innerHTML = uniqueTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (uniqueTypes.length) onProductTypeChange();
 }
 
+// Step 3: Populate all linked Models for selected Product Name + Product Type
 function onProductTypeChange() {
-    const id = document.getElementById('gen_product_type').value;
-    const p = PRODUCTS_DATA.find(x => String(x.id) === String(id));
-    if (p) {
-        document.getElementById('gen_model_name').value = p.model_name;
-        document.getElementById('gen_product_id').value = p.id;
-        updateLiveGeneratorPreview(p);
+    const selectedName = document.getElementById('gen_product_name').value;
+    const selectedType = document.getElementById('gen_product_type').value;
+
+    const matchingModels = PRODUCTS_DATA.filter(
+        p => p.product_name === selectedName && p.product_type === selectedType
+    );
+
+    const modelSel = document.getElementById('gen_model_select');
+    modelSel.innerHTML = matchingModels.map(p => `<option value="${p.id}">${p.model_name}</option>`).join('');
+
+    const badge = document.getElementById('model_count_badge');
+    badge.textContent = matchingModels.length > 1 ? `${matchingModels.length} Models Available` : '1 Linked Model';
+
+    if (matchingModels.length) onModelChange();
+}
+
+// Step 4: Update preview when specific Model is chosen
+function onModelChange() {
+    const productId = document.getElementById('gen_model_select').value;
+    const product = PRODUCTS_DATA.find(x => String(x.id) === String(productId));
+    if (product) {
+        updateLiveGeneratorPreview(product);
     }
 }
 
@@ -134,7 +165,7 @@ function buildPreviewSerial(pattern, prefix, sizeCode, modelName) {
 }
 
 function updateLiveGeneratorPreview(p) {
-    if (!p) p = PRODUCTS_DATA[0] || { size_code: '43', model_name: 'SN4300' };
+    if (!p) p = PRODUCTS_DATA[0] || { size_code: '32', model_name: 'SN3200' };
     const sn = buildPreviewSerial(ACTIVE_FORMAT.pattern, ACTIVE_FORMAT.prefix, p.size_code, p.model_name);
     document.getElementById('live_sn_sample').textContent = sn;
     document.getElementById('preview_label_model').textContent = p.model_name;
